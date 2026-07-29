@@ -38,7 +38,7 @@ log-friends-examples
 
 ```kotlin
 dependencies {
-    implementation("com.github.log-freind:log-friends-sdk:v0.3.0")
+    implementation("com.github.log-freind:log-friends-sdk:v0.3.1")
 }
 ```
 
@@ -60,6 +60,11 @@ export LOGFRIENDS_APP_NAME=order-service
 
 # Optional: included in Discovered LogEvent reports when set.
 export LOGFRIENDS_APP_VERSION=local
+
+# Optional batch runtime policy.
+export LOGFRIENDS_BATCH_SIZE=100
+export LOGFRIENDS_BATCH_INTERVAL_MS=500
+export LOGFRIENDS_QUEUE_CAPACITY=10000
 ```
 
 Equivalent Spring/system properties:
@@ -68,6 +73,12 @@ Equivalent Spring/system properties:
 - `LOGFRIENDS_WORKER_ID` or `logfriends.worker.id`
 - `LOGFRIENDS_APP_NAME`, `logfriends.app.name`, or `spring.application.name`
 - Optional `LOGFRIENDS_APP_VERSION` or `logfriends.app.version`
+- Optional `LOGFRIENDS_BATCH_SIZE` or `logfriends.batch.size`
+- Optional `LOGFRIENDS_BATCH_INTERVAL_MS` or `logfriends.batch.interval.ms`
+- Optional `LOGFRIENDS_QUEUE_CAPACITY` or `logfriends.queue.capacity`
+
+Environment variables take precedence over equivalent properties. `LOGFRIENDS_QUEUE_CAPACITY`
+limits the number of queued events; it is a heap protection boundary, not a byte or MB limit.
 
 Required JVM option for runtime attach:
 

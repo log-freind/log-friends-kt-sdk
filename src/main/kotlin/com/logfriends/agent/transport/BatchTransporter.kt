@@ -7,12 +7,14 @@ import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
-class BatchTransporter private constructor(
+class BatchTransporter internal constructor(
     private val batchSize: Int,
-    private val intervalMs: Long
+    private val intervalMs: Long,
+    private val ingestUrl: String = LogFriendsRuntime.ingestUrl ?: "",
+    private val workerId: String = LogFriendsRuntime.workerId ?: "",
+    queueCapacity: Int = BatchTransportConfig.queueCapacity(),
+    private val postBatch: ((String) -> Unit)? = null
 ) {
-
-    private val ingestUrl: String = LogFriendsRuntime.ingestUrl ?: ""
 
     private val queue: BlockingQueue<AgentEvent>
     private val scheduler: ScheduledExecutorService
@@ -20,13 +22,9 @@ class BatchTransporter private constructor(
     private val sentCount = AtomicLong(0)
     private val dropCount = AtomicLong(0)
     private val lastDropWarnAt = AtomicLong(0)
-
-    private val workerId: String = LogFriendsRuntime.workerId ?: ""
-
     private val ingestClient: IngestHttpClient by lazy { IngestHttpClient(ingestUrl) }
 
     init {
-        val queueCapacity = System.getProperty("logfriends.queue.capacity", "10000").toInt()
         queue = LinkedBlockingQueue(queueCapacity)
 
         scheduler = Executors.newSingleThreadScheduledExecutor { r ->
@@ -125,24 +123,25 @@ class BatchTransporter private constructor(
     }
 
     @Synchronized
-    private fun flush() {
+    internal fun flush() {
         val buffer = ArrayList<AgentEvent>(batchSize)
         queue.drainTo(buffer, batchSize)
         if (buffer.isEmpty()) return
 
         val json = EventJsonWriter.writeBatch(workerId, buffer)
         try {
-            ingestClient.post(json)
+            postBatch?.invoke(json) ?: ingestClient.post(json)
             sentCount.addAndGet(buffer.size.toLong())
         } catch (e: Exception) {
             dropCount.addAndGet(buffer.size.toLong())
-            System.err.println("[Log Friends] Batch flush failed; dropped ${buffer.size} events: ${e.message}")
+            System.err.println(
+                "[Log Friends] Batch flush failed; dropped=${buffer.size}, " +
+                    "queued=${queue.size}: ${e.message}"
+            )
         }
     }
 
     companion object {
-        private const val DEFAULT_BATCH_SIZE = 100
-        private const val DEFAULT_INTERVAL_MS = 500L
         private const val QUEUE_OFFER_TIMEOUT_MS = 10L
         private const val DROP_WARN_INTERVAL_MS = 60_000L
 
@@ -153,8 +152,8 @@ class BatchTransporter private constructor(
         fun getInstance(): BatchTransporter {
             return instance ?: synchronized(this) {
                 instance ?: run {
-                    val batch = System.getProperty("logfriends.batch.size", DEFAULT_BATCH_SIZE.toString()).toInt()
-                    val interval = System.getProperty("logfriends.batch.interval.ms", DEFAULT_INTERVAL_MS.toString()).toLong()
+                    val batch = BatchTransportConfig.batchSize()
+                    val interval = BatchTransportConfig.intervalMs()
                     BatchTransporter(batch, interval).also { instance = it }
                 }
             }
