@@ -70,11 +70,12 @@ log-friends-examples
 
 ```kotlin
 dependencies {
-    implementation("com.github.log-freind:log-friends-sdk:v1.0.0")
+    implementation("com.github.log-freind:log-friends-sdk:1.0.0")
 }
 ```
 
-Use JitPack for GitHub tag-based consumption:
+Use JitPack for GitHub tag-based consumption. The Maven coordinate uses the
+`1.0.0` compatibility tag without the GitHub Release's `v` prefix:
 
 ```kotlin
 repositories {
