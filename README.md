@@ -1,6 +1,12 @@
 # log-friends-sdk
 
-Kotlin/JVM SDK for Spring Boot applications. It installs ByteBuddy instrumentation in the target JVM, captures runtime events, registers the running Agent with `log-friends-console`, and sends HTTP JSON event batches to the Console ingest endpoint.
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![JVM](https://img.shields.io/badge/JVM-21-007396.svg)](https://adoptium.net/)
+[![Release](https://img.shields.io/badge/release-v1.0.0-2ea44f.svg)](https://github.com/log-freind/log-friends-sdk/tree/v1.0.0)
+
+Log Friends SDK turns runtime activity inside a Spring Boot service into structured events that backend and data teams can understand together.
+
+Instead of leaving business meaning in scattered string logs and separate documents, developers define an `eventName` and field descriptions in the code path where the event occurs. The SDK captures that event without requiring a data engineer to modify the target service, then sends it to Log Friends Console.
 
 ```text
 Spring Boot App + log-friends-sdk
@@ -11,7 +17,33 @@ Spring Boot App + log-friends-sdk
   -> log-friends-console
 ```
 
-The SDK captures five event types with ByteBuddy: `HTTP`, `LOG`, `JDBC`, `METHOD_TRACE`, and `LOG_EVENT`. The current SDK path is HTTP-only; it does not assume Kafka, Spark, ClickHouse, or another broker/analytics pipeline.
+The SDK also captures `HTTP`, `LOG`, `JDBC`, and `METHOD_TRACE` runtime signals. The current path is intentionally HTTP-only; it does not require Kafka, Spark, ClickHouse, or another broker.
+
+## Why It Exists
+
+Small teams often have useful data but cannot start using it because event names, payload meanings, and ownership are not agreed on. Log Friends moves that agreement closer to implementation:
+
+```text
+Code annotation
+  -> structured LOG_EVENT
+  -> bounded in-memory queue
+  -> Console Raw Events
+  -> Log Catalog contract review
+```
+
+The priority is target-service safety. Capture and delivery must not turn an observability tool into the reason the application fails.
+
+## 1.0 Compatibility Baseline
+
+Version `1.0.0` establishes the first stable public baseline for:
+
+- annotation names and the `LOG_EVENT` payload shape
+- `workerId`, `appName`, and ingest URL configuration keys
+- startup Agent registration and discovered event reporting
+- HTTP JSON batch delivery to Console `POST /ingest`
+- bounded queue, batch interval, batch size, and drop behavior
+
+Future breaking changes to these contracts require a new major version.
 
 ## Repository Role
 
@@ -38,7 +70,7 @@ log-friends-examples
 
 ```kotlin
 dependencies {
-    implementation("com.github.log-freind:log-friends-sdk:v0.3.0")
+    implementation("com.github.log-freind:log-friends-sdk:v1.0.0")
 }
 ```
 
@@ -60,6 +92,11 @@ export LOGFRIENDS_APP_NAME=order-service
 
 # Optional: included in Discovered LogEvent reports when set.
 export LOGFRIENDS_APP_VERSION=local
+
+# Optional batch runtime policy.
+export LOGFRIENDS_BATCH_SIZE=100
+export LOGFRIENDS_BATCH_INTERVAL_MS=500
+export LOGFRIENDS_QUEUE_CAPACITY=10000
 ```
 
 Equivalent Spring/system properties:
@@ -68,6 +105,12 @@ Equivalent Spring/system properties:
 - `LOGFRIENDS_WORKER_ID` or `logfriends.worker.id`
 - `LOGFRIENDS_APP_NAME`, `logfriends.app.name`, or `spring.application.name`
 - Optional `LOGFRIENDS_APP_VERSION` or `logfriends.app.version`
+- Optional `LOGFRIENDS_BATCH_SIZE` or `logfriends.batch.size`
+- Optional `LOGFRIENDS_BATCH_INTERVAL_MS` or `logfriends.batch.interval.ms`
+- Optional `LOGFRIENDS_QUEUE_CAPACITY` or `logfriends.queue.capacity`
+
+Environment variables take precedence over equivalent properties. `LOGFRIENDS_QUEUE_CAPACITY`
+limits the number of queued events; it is a heap protection boundary, not a byte or MB limit.
 
 Required JVM option for runtime attach:
 
@@ -88,6 +131,14 @@ At Spring Boot startup, the SDK installs ByteBuddy instrumentation for:
 On `ApplicationReadyEvent`, the SDK sends startup Agent registration to Console `POST /api/agents` using `workerId` and `appName`. If registration succeeds, the SDK scans loaded classes for `@LogEvent` methods and reports Discovered LogEvent candidates to `POST /api/agents/{agentId}/discovered-log-events`.
 
 Runtime events are queued and flushed as HTTP JSON batches to the configured `LOGFRIENDS_INGEST_URL`, normally Console `POST /ingest`. `/ingest` stores captured Raw Events only; it does not auto-register Agents.
+
+The queue has three runtime boundaries:
+
+- **time**: flush every `LOGFRIENDS_BATCH_INTERVAL_MS`
+- **count**: flush when `LOGFRIENDS_BATCH_SIZE` is reached
+- **capacity**: keep at most `LOGFRIENDS_QUEUE_CAPACITY` events in heap
+
+When the queue is full, enqueue waits for at most 10 ms and then drops the new event. A failed HTTP batch is also dropped. This policy protects the main application from unbounded heap growth and Kubernetes `OOMKilled`; Log Friends events are observability data, not the source of truth for orders or payments.
 
 Discovered LogEvent candidates are code hints, not contracts. The SDK does not auto-register or promote `LogSpec`; create and edit `LogSpec` through Console APIs.
 
@@ -117,6 +168,14 @@ fun registerUser(
 ./gradlew build
 ./gradlew publishToMavenLocal
 ```
+
+To run the request-thread enqueue benchmark:
+
+```bash
+./gradlew test --tests com.logfriends.agent.transport.BatchTransporterBenchmarkTest
+```
+
+This benchmark measures local event construction and queue insertion only. It does not represent Console HTTP delivery or database write latency.
 
 ## Documentation
 

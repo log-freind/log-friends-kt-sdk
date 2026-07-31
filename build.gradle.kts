@@ -4,7 +4,7 @@ plugins {
 }
 
 group   = "com.logfriends"
-version = "0.3.0"
+version = "1.0.0"
 
 repositories {
     mavenCentral()
@@ -26,6 +26,10 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    systemProperty("logfriends.benchmark", System.getProperty("logfriends.benchmark", "false"))
+    if (System.getProperty("logfriends.benchmark") == "true") {
+        testLogging.showStandardStreams = true
+    }
 }
 
 kotlin {
