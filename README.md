@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![JVM](https://img.shields.io/badge/JVM-21-007396.svg)](https://adoptium.net/)
-[![Release](https://img.shields.io/badge/release-v1.0.0-2ea44f.svg)](https://github.com/log-freind/log-friends-sdk/tree/v1.0.0)
+[![Release](https://img.shields.io/badge/release-v1.1.0-2ea44f.svg)](https://github.com/log-freind/log-friends-sdk/tree/1.1.0)
 
 Log Friends SDK turns runtime activity inside a Spring Boot service into structured events that backend and data teams can understand together.
 
@@ -33,15 +33,16 @@ Code annotation
 
 The priority is target-service safety. Capture and delivery must not turn an observability tool into the reason the application fails.
 
-## 1.0 Compatibility Baseline
+## 1.1 Compatibility Baseline
 
-Version `1.0.0` establishes the first stable public baseline for:
+Version `1.1.0` keeps the stable public baseline for:
 
 - annotation names and the `LOG_EVENT` payload shape
 - `workerId`, `appName`, and ingest URL configuration keys
 - startup Agent registration and discovered event reporting
 - HTTP JSON batch delivery to Console `POST /ingest`
 - bounded queue, batch interval, batch size, and drop behavior
+- optional Actuator delivery statistics at `GET /actuator/logfriends`
 
 Future breaking changes to these contracts require a new major version.
 
@@ -70,12 +71,12 @@ log-friends-examples
 
 ```kotlin
 dependencies {
-    implementation("com.github.log-freind:log-friends-sdk:1.0.0")
+    implementation("com.github.log-freind:log-friends-sdk:1.1.0")
 }
 ```
 
 Use JitPack for GitHub tag-based consumption. The Maven coordinate uses the
-`1.0.0` compatibility tag without the GitHub Release's `v` prefix:
+`1.1.0` compatibility tag:
 
 ```kotlin
 repositories {
