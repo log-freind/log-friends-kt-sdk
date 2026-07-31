@@ -19,8 +19,10 @@ class BatchTransporter internal constructor(
     private val queue: BlockingQueue<AgentEvent>
     private val scheduler: ScheduledExecutorService
     private val running = AtomicBoolean(true)
+    private val capturedCount = AtomicLong(0)
     private val sentCount = AtomicLong(0)
     private val dropCount = AtomicLong(0)
+    private val inFlightCount = AtomicLong(0)
     private val lastDropWarnAt = AtomicLong(0)
     private val ingestClient: IngestHttpClient by lazy { IngestHttpClient(ingestUrl) }
 
@@ -81,9 +83,19 @@ class BatchTransporter internal constructor(
     }
 
     val stats: String
-        get() = "sent=${sentCount.get()}, dropped=${dropCount.get()}, queued=${queue.size}"
+        get() = snapshot().toLogMessage()
+
+    fun snapshot(): TransportStats = TransportStats(
+        captured = capturedCount.get(),
+        sent = sentCount.get(),
+        dropped = dropCount.get(),
+        queued = queue.size.toLong(),
+        inFlight = inFlightCount.get()
+    )
 
     private fun enqueue(event: AgentEvent) {
+        capturedCount.incrementAndGet()
+
         if (workerId.isBlank() || ingestUrl.isBlank()) {
             dropCount.incrementAndGet()
             return
@@ -128,6 +140,7 @@ class BatchTransporter internal constructor(
         queue.drainTo(buffer, batchSize)
         if (buffer.isEmpty()) return
 
+        inFlightCount.addAndGet(buffer.size.toLong())
         val json = EventJsonWriter.writeBatch(workerId, buffer)
         try {
             postBatch?.invoke(json) ?: ingestClient.post(json)
@@ -138,6 +151,8 @@ class BatchTransporter internal constructor(
                 "[Log Friends] Batch flush failed; dropped=${buffer.size}, " +
                     "queued=${queue.size}: ${e.message}"
             )
+        } finally {
+            inFlightCount.addAndGet(-buffer.size.toLong())
         }
     }
 
@@ -159,4 +174,18 @@ class BatchTransporter internal constructor(
             }
         }
     }
+}
+
+data class TransportStats(
+    val captured: Long,
+    val sent: Long,
+    val dropped: Long,
+    val queued: Long,
+    val inFlight: Long
+) {
+    val accounted: Long
+        get() = sent + dropped + queued + inFlight
+
+    fun toLogMessage(): String =
+        "captured=$captured, sent=$sent, dropped=$dropped, queued=$queued, inFlight=$inFlight"
 }

@@ -19,6 +19,7 @@ dependencies {
 
     // Spring Boot AutoConfigure - 컴파일 전용 (Spring 없는 환경도 지원)
     compileOnly("org.springframework.boot:spring-boot-autoconfigure:3.5.9")
+    compileOnly("org.springframework.boot:spring-boot-starter-actuator:3.5.9")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.1")
     testImplementation("org.junit.platform:junit-platform-launcher:1.10.1")

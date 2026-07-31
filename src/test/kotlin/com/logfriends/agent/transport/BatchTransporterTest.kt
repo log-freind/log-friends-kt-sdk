@@ -32,11 +32,17 @@ class BatchTransporterTest {
 
             transporter.flush()
 
-            assertEquals("sent=0, dropped=1, queued=0", transporter.stats)
+            assertEquals(
+                "captured=1, sent=0, dropped=1, queued=0, inFlight=0",
+                transporter.stats
+            )
 
             transporter.flush()
 
-            assertEquals("sent=0, dropped=1, queued=0", transporter.stats)
+            assertEquals(
+                "captured=1, sent=0, dropped=1, queued=0, inFlight=0",
+                transporter.stats
+            )
             assertEquals(1, attempts)
             assertEquals(0, sentPayloads.size)
         } finally {

@@ -6,6 +6,7 @@ import com.logfriends.agent.transport.AgentRegistrationClient
 import com.logfriends.agent.transport.BatchTransporter
 import com.logfriends.agent.transport.DiscoveredLogEventReportClient
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.Bean
@@ -14,6 +15,10 @@ import java.util.concurrent.TimeUnit
 
 @AutoConfiguration
 class LogFriendsAutoConfiguration {
+
+    @Bean
+    @ConditionalOnClass(name = ["org.springframework.boot.actuate.endpoint.annotation.Endpoint"])
+    fun logFriendsStatsEndpoint(): LogFriendsStatsEndpoint = LogFriendsStatsEndpoint()
 
     @Bean
     fun logFriendsReadyListener(): ApplicationListener<ApplicationReadyEvent> {
