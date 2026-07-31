@@ -141,6 +141,37 @@ The queue has three runtime boundaries:
 
 When the queue is full, enqueue waits for at most 10 ms and then drops the new event. A failed HTTP batch is also dropped. This policy protects the main application from unbounded heap growth and Kubernetes `OOMKilled`; Log Friends events are observability data, not the source of truth for orders or payments.
 
+### Delivery Statistics
+
+When the target application includes Spring Boot Actuator, expose the SDK endpoint to
+verify a load test without inferring results from timestamps or Console aggregates:
+
+```yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,logfriends
+```
+
+Then query `GET /actuator/logfriends`:
+
+```json
+{
+  "captured": 10000,
+  "sent": 10000,
+  "dropped": 0,
+  "queued": 0,
+  "inFlight": 0,
+  "accounted": 10000
+}
+```
+
+The invariant is `captured = sent + dropped + queued + inFlight`.
+For a completed test, wait until `queued` and `inFlight` are both zero, then compare
+`sent` with the Console's stored event count for the same test marker. Do not expose
+this endpoint publicly without the target application's normal Actuator access controls.
+
 Discovered LogEvent candidates are code hints, not contracts. The SDK does not auto-register or promote `LogSpec`; create and edit `LogSpec` through Console APIs.
 
 ## LogEvent Example
