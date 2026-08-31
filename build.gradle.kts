@@ -23,12 +23,25 @@ dependencies {
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.1")
     testImplementation("org.junit.platform:junit-platform-launcher:1.10.1")
+    testImplementation("org.openjdk.jol:jol-core:0.17")
 }
 
 tasks.test {
     useJUnitPlatform()
     systemProperty("logfriends.benchmark", System.getProperty("logfriends.benchmark", "false"))
+    systemProperty("logfriends.queue.heap", System.getProperty("logfriends.queue.heap", "false"))
+    systemProperty(
+        "logfriends.queue.heap.events",
+        System.getProperty("logfriends.queue.heap.events", "10000")
+    )
     if (System.getProperty("logfriends.benchmark") == "true") {
+        testLogging.showStandardStreams = true
+    }
+    if (System.getProperty("logfriends.queue.heap") == "true") {
+        jvmArgs(
+            "-Djdk.attach.allowAttachSelf=true",
+            "-XX:+EnableDynamicAgentLoading"
+        )
         testLogging.showStandardStreams = true
     }
 }

@@ -210,6 +210,20 @@ To run the request-thread enqueue benchmark:
 
 This benchmark measures local event construction and queue insertion only. It does not represent Console HTTP delivery or database write latency.
 
+To inspect the heap footprint reachable from the SDK event queue:
+
+```bash
+./gradlew test \
+  --tests com.logfriends.agent.transport.BatchTransporterQueueHeapTest \
+  -Dlogfriends.queue.heap=true \
+  -Dlogfriends.queue.heap.events=10000 \
+  --rerun-tasks
+```
+
+This opt-in diagnostic uses JOL on the `LinkedBlockingQueue` object graph. It is not
+executed in the target application's enqueue path and does not provide a production
+memory limit. The result depends on the JVM object layout and the sampled payload.
+
 ## Documentation
 
 Detailed SDK docs live in the GitHub Wiki:
