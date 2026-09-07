@@ -20,7 +20,11 @@ class BatchTransporterBenchmarkTest {
             intervalMs = 60_000,
             ingestUrl = "http://console/ingest",
             workerId = "worker-benchmark",
-            queueCapacity = warmupIterations + measuredIterations + 1
+            queueCapacity = warmupIterations + measuredIterations + 1,
+            // The benchmark is about request-thread enqueue cost. A real
+            // memory budget is covered by separate tests and must not turn
+            // most measured iterations into an early-drop fast path.
+            queueMemoryBudgetBytes = Long.MAX_VALUE
         ) {
             // Keep the benchmark focused on request-thread enqueue overhead.
         }

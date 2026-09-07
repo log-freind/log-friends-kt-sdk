@@ -99,6 +99,7 @@ export LOGFRIENDS_APP_VERSION=local
 export LOGFRIENDS_BATCH_SIZE=100
 export LOGFRIENDS_BATCH_INTERVAL_MS=500
 export LOGFRIENDS_QUEUE_CAPACITY=10000
+export LOGFRIENDS_QUEUE_MEMORY_BUDGET_BYTES=33554432
 ```
 
 Equivalent Spring/system properties:
@@ -110,9 +111,13 @@ Equivalent Spring/system properties:
 - Optional `LOGFRIENDS_BATCH_SIZE` or `logfriends.batch.size`
 - Optional `LOGFRIENDS_BATCH_INTERVAL_MS` or `logfriends.batch.interval.ms`
 - Optional `LOGFRIENDS_QUEUE_CAPACITY` or `logfriends.queue.capacity`
+- Optional `LOGFRIENDS_QUEUE_MEMORY_BUDGET_BYTES` or `logfriends.queue.memory.budget.bytes`
 
 Environment variables take precedence over equivalent properties. `LOGFRIENDS_QUEUE_CAPACITY`
-limits the number of queued events; it is a heap protection boundary, not a byte or MB limit.
+limits the number of queued events. `LOGFRIENDS_QUEUE_MEMORY_BUDGET_BYTES` additionally
+limits the SDK's conservative retained-heap estimate (default: 32 MiB). The estimate uses
+the actual String lengths in each captured event, JDK 21 object-layout constants, and Queue
+Node overhead; it intentionally treats String data as UTF-16 for a safe upper bound.
 
 Required JVM option for runtime attach:
 
@@ -139,8 +144,14 @@ The queue has three runtime boundaries:
 - **time**: flush every `LOGFRIENDS_BATCH_INTERVAL_MS`
 - **count**: flush when `LOGFRIENDS_BATCH_SIZE` is reached
 - **capacity**: keep at most `LOGFRIENDS_QUEUE_CAPACITY` events in heap
+- **memory budget**: retain at most `LOGFRIENDS_QUEUE_MEMORY_BUDGET_BYTES` of estimated
+  event graph and Queue Node memory (default: 32 MiB)
 
-When the queue is full, enqueue waits for at most 10 ms and then drops the new event. A failed HTTP batch is also dropped. This policy protects the main application from unbounded heap growth and Kubernetes `OOMKilled`; Log Friends events are observability data, not the source of truth for orders or payments.
+When either queue boundary is full, enqueue waits for at most 10 ms only for the event-count
+Queue and then drops the new event. A failed HTTP batch is also dropped. The retained-heap
+reservation covers queued and in-flight batch events until delivery completes. This policy
+protects the main application from unbounded heap growth and Kubernetes `OOMKilled`; Log
+Friends events are observability data, not the source of truth for orders or payments.
 
 ### Delivery Statistics
 
