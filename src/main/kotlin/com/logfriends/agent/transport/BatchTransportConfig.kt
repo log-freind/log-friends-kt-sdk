@@ -4,6 +4,7 @@ internal object BatchTransportConfig {
     const val DEFAULT_BATCH_SIZE = 100
     const val DEFAULT_INTERVAL_MS = 500L
     const val DEFAULT_QUEUE_CAPACITY = 10_000
+    const val DEFAULT_QUEUE_MEMORY_BUDGET_BYTES = 32L * 1024L * 1024L
 
     fun batchSize(): Int = resolvePositiveInt(
         environmentValue = System.getenv("LOGFRIENDS_BATCH_SIZE"),
@@ -21,6 +22,12 @@ internal object BatchTransportConfig {
         environmentValue = System.getenv("LOGFRIENDS_QUEUE_CAPACITY"),
         propertyValue = System.getProperty("logfriends.queue.capacity"),
         defaultValue = DEFAULT_QUEUE_CAPACITY
+    )
+
+    fun queueMemoryBudgetBytes(): Long = resolvePositiveLong(
+        environmentValue = System.getenv("LOGFRIENDS_QUEUE_MEMORY_BUDGET_BYTES"),
+        propertyValue = System.getProperty("logfriends.queue.memory.budget.bytes"),
+        defaultValue = DEFAULT_QUEUE_MEMORY_BUDGET_BYTES
     )
 
     internal fun resolvePositiveInt(

@@ -13,6 +13,7 @@ class BatchTransporter internal constructor(
     private val ingestUrl: String = LogFriendsRuntime.ingestUrl ?: "",
     private val workerId: String = LogFriendsRuntime.workerId ?: "",
     queueCapacity: Int = BatchTransportConfig.queueCapacity(),
+    private val queueMemoryBudgetBytes: Long = BatchTransportConfig.queueMemoryBudgetBytes(),
     private val postBatch: ((String) -> Unit)? = null
 ) {
 
@@ -23,6 +24,7 @@ class BatchTransporter internal constructor(
     private val sentCount = AtomicLong(0)
     private val dropCount = AtomicLong(0)
     private val inFlightCount = AtomicLong(0)
+    private val retainedEstimatedHeapBytes = AtomicLong(0)
     private val lastDropWarnAt = AtomicLong(0)
     private val ingestClient: IngestHttpClient by lazy { IngestHttpClient(ingestUrl) }
 
@@ -90,7 +92,9 @@ class BatchTransporter internal constructor(
         sent = sentCount.get(),
         dropped = dropCount.get(),
         queued = queue.size.toLong(),
-        inFlight = inFlightCount.get()
+        inFlight = inFlightCount.get(),
+        estimatedRetainedHeapBytes = retainedEstimatedHeapBytes.get(),
+        queueMemoryBudgetBytes = queueMemoryBudgetBytes
     )
 
     private fun enqueue(event: AgentEvent) {
@@ -101,7 +105,15 @@ class BatchTransporter internal constructor(
             return
         }
 
+        val estimatedHeapBytes = EventHeapEstimator.estimateQueuedEventBytes(event)
+        if (!tryReserveHeapBudget(estimatedHeapBytes)) {
+            dropCount.incrementAndGet()
+            warnDroppedEventsIfNeeded()
+            return
+        }
+
         if (!offerWithTimeout(event)) {
+            releaseHeapBudget(estimatedHeapBytes)
             dropCount.incrementAndGet()
             warnDroppedEventsIfNeeded()
         }
@@ -116,6 +128,24 @@ class BatchTransporter internal constructor(
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
             false
+        }
+    }
+
+    private fun tryReserveHeapBudget(estimatedHeapBytes: Long): Boolean {
+        while (true) {
+            val current = retainedEstimatedHeapBytes.get()
+            if (estimatedHeapBytes > queueMemoryBudgetBytes - current) {
+                return false
+            }
+            if (retainedEstimatedHeapBytes.compareAndSet(current, current + estimatedHeapBytes)) {
+                return true
+            }
+        }
+    }
+
+    private fun releaseHeapBudget(estimatedHeapBytes: Long) {
+        retainedEstimatedHeapBytes.updateAndGet { current ->
+            (current - estimatedHeapBytes).coerceAtLeast(0)
         }
     }
 
@@ -139,6 +169,7 @@ class BatchTransporter internal constructor(
         val buffer = ArrayList<AgentEvent>(batchSize)
         queue.drainTo(buffer, batchSize)
         if (buffer.isEmpty()) return
+        val batchEstimatedHeapBytes = buffer.sumOf(EventHeapEstimator::estimateQueuedEventBytes)
 
         inFlightCount.addAndGet(buffer.size.toLong())
         val json = EventJsonWriter.writeBatch(workerId, buffer)
@@ -153,6 +184,7 @@ class BatchTransporter internal constructor(
             )
         } finally {
             inFlightCount.addAndGet(-buffer.size.toLong())
+            releaseHeapBudget(batchEstimatedHeapBytes)
         }
     }
 
@@ -181,7 +213,9 @@ data class TransportStats(
     val sent: Long,
     val dropped: Long,
     val queued: Long,
-    val inFlight: Long
+    val inFlight: Long,
+    val estimatedRetainedHeapBytes: Long = 0,
+    val queueMemoryBudgetBytes: Long = 0
 ) {
     val accounted: Long
         get() = sent + dropped + queued + inFlight
